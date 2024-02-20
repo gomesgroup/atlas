@@ -98,10 +98,13 @@ class FeasibilityAwareAcquisition(Object, metaclass=ABCMeta):
         Args:
             X (torch.tensor): input tensor with shape (num_samples, q_batch_size, num_dims)
         """
-        with gpytorch.settings.cholesky_jitter(1e-1):
-            return self.cla_likelihood(
-                self.cla_model(X.float().squeeze(1))
-            ).mean
+        if self.cla_likelihood is None:
+            return self.cla_model.predict(X.float().squeeze(1))
+        else:
+            with gpytorch.settings.cholesky_jitter(1e-1):
+                return self.cla_likelihood(
+                    self.cla_model(X.float().squeeze(1))
+                ).mean
 
     def compute_combined_acqf(
         self, acqf_val: torch.Tensor, X: torch.Tensor
@@ -411,9 +414,15 @@ class PI(FeasibilityAwareAcquisition):
         mean, sigma = self.compute_mean_sigma(posterior)
         u = -((mean - self.f_best_scaled.expand_as(mean)) / sigma)
 
-        # TODO: complete this method
-        return None
-
+        # Use a standard normal distribution
+        normal = torch.distributions.Normal(
+            torch.zeros_like(u), torch.ones_like(u)
+        )
+        
+        # Calculate the probability of improvement
+        acqf_val = normal.cdf(u)
+        
+        return acqf_val
 
 class EI(FeasibilityAwareAcquisition):
     def __init__(self, reg_model, cla_model, cla_likelihood, **acqf_args):
@@ -571,7 +580,25 @@ class qLCB(MonteCarloAcquisition):
     """q-Lower Confidence Bound"""
 
     def __init__(self, reg_model, cla_model, cla_likelihood=None, **acqf_args):
-        pass
+        super().__init__(reg_model, cla_model, cla_likelihood, **acqf_args)
+        self.reg_model = reg_model
+        # Adjusting the beta_prime for LCB to control exploration vs. exploitation trade-off.
+        self.beta_prime = torch.sqrt(
+            acqf_args.get("beta", 2.576) * torch.Tensor([3.141]) / 2
+        )  # Default value of beta can be adjusted as per requirement.
+        
+    def _sample(self, X: torch.Tensor) -> torch.Tensor:
+        """evaluate per sample Monte Carlo acquisition function on
+        set of candidates X
+
+        Args:
+            X (torch.Tensor): `sample_shape x batch_shape x q` Tensor of
+                Monte Carlo objective values
+        """
+        
+        mean = X.mean(dim=0)
+        # For LCB, we subtract the scaled deviation from the mean instead of adding it.
+        return mean - self.beta_prime * (X - mean).abs()
 
 
 def get_acqf_instance(
@@ -646,6 +673,93 @@ def get_acqf_instance(
             cla_likelihood=cla_likelihood,
             **acqf_args,
         )
+    elif acquisition_type == "all":
+        ei = __import__(
+            f"atlas.acquisition_functions.acqfs",
+            fromlist=["EI"],
+        )
+        pi = __import__(
+            f"atlas.acquisition_functions.acqfs",
+            fromlist=["PI"],
+        )
+        variance = VarianceBased(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+        greedy = Greedy(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+        acqf_args["beta"] = torch.tensor(
+                [1.0], **tkwargs
+            )  # default value of beta
+        ucb = __import__(
+            f"atlas.acquisition_functions.acqfs",
+            fromlist=["UCB"],
+        )
+        lcb = __import__(
+            f"atlas.acquisition_functions.acqfs",
+            fromlist=["LCB"],
+        )
+        _ucb = getattr(ucb, "UCB")
+        _ucb = _ucb(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+        _lcb = getattr(lcb, "LCB")
+        _lcb = _lcb(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+        _ei = getattr(ei, "EI")
+        _ei = _ei(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+        _pi = getattr(pi, "PI")
+        _pi = _pi(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+        acqf_args["beta"] = torch.tensor([0.2], **tkwargs).repeat(
+                acqf_args["batch_size"]
+            )  # default value of beta
+        qucb = __import__(
+            f"atlas.acquisition_functions.acqfs",
+            fromlist=["qUCB"],
+        )
+        qlcb = __import__(
+            f"atlas.acquisition_functions.acqfs",
+            fromlist=["qLCB"],
+        )
+        _qucb = getattr(qucb, "qUCB")
+        _qlcb = getattr(qlcb, "qLCB")
+        _qucb = _qucb(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+        _qlcb = _qlcb(
+            reg_model=reg_model,
+            cla_model=cla_model,
+            cla_likelihood=cla_likelihood,
+            **acqf_args,
+        )
+#        return [_ei, _pi, variance, greedy, _ucb, _lcb, _qucb, _qlcb]
+        return [_ei, _pi, _ucb]
     else:
         msg = f"Acquisition function type {acquisition_type} not understood!"
         Logger.log(msg, "FATAL")

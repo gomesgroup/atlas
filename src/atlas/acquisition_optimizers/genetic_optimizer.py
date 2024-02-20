@@ -84,7 +84,7 @@ class GeneticOptimizer(AcquisitionOptimizer):
         # < 0 is an infeasible point --> False
         # transform dictionary rep of x to expanded format
         expanded = self.params_obj.param_vectors_to_expanded(
-            [ParameterVector().from_dict(params, self.param_space)],
+            [ParameterVector().from_list(params, self.param_space)],
             is_scaled=True,
             return_scaled=False,  # should already be scaled
         )
@@ -162,6 +162,8 @@ class GeneticOptimizer(AcquisitionOptimizer):
     def deindexify(self, x):
         samples = []
         for x_ in x:
+            if isinstance(x_, np.ndarray):
+                x_ = x_.tolist()
             sample = []
             counter = 0
             for elem, p in zip(x_, self.param_space):
@@ -180,27 +182,33 @@ class GeneticOptimizer(AcquisitionOptimizer):
                         )
                     )
             samples.append(sample)
+            
         return np.array(samples)
 
-    def acquisition(self, x: np.ndarray) -> Tuple:
-        x = self.deindexify(x.reshape((1, x.shape[0])))
-        # x = torch.tensor(
-        #     x.reshape((1, self.batch_size, x.shape[1]))
-        # )
+    def acquisition(self, x: np.ndarray, clf=None,) -> Tuple:
+        x = torch.tensor(
+            forward_normalize(
+                self.deindexify(x.reshape((1, x.shape[0]))), 
+                self.params_obj._mins_x, 
+                self.params_obj._maxs_x
+            )
+        )
         # inflate to batch_size for acqf
-        x = torch.tile(torch.tensor(x), dims=(1, self.batch_size, 1))
+        x_for_acqf = torch.tile(x, dims=(1, self.batch_size, 1))
+        # Compute the acquisition function value.
+        acqf_val = self.acqf(x_for_acqf).detach().numpy()[0]  
+        # if we have a classifier, multiply the acqf by the feasibility probability
+        if clf is not None:
+            class_probs = clf.predict_proba(x)
+            feas_prob = class_probs[0][0]
+            acqf_val *= feas_prob
         # return the negative of the acqf - this is conventionally minimized by
         # deap, but we want to maximize acqf
-        return (-self.acqf(x).detach().numpy()[0],)
+        return (-round(acqf_val, 5),)
 
-    def _optimize(
-        self, max_iter: int = 10, show_progress: bool = True
-    ) -> List[ParameterVector]:
+    def gen_population(self, show_progress: bool = True, max_iter: int = 10):
         """
-        Returns list of parameter vectors with the optimized recommendations
-
-        show_progress : bool
-            whether to display the optimization progress. Default is False.
+        Generate population using genetic algorithm
         """
         (
             self.nonlinear_inequality_constraints,
@@ -343,15 +351,20 @@ class GeneticOptimizer(AcquisitionOptimizer):
         del creator.FitnessMin
         del creator.Individual
 
-        # select best recommendations and return them as param vectors
-        acqf_vals = [self.acquisition(x)[0] for x in np.array(population)]
+        return population
 
+    def evaluate_population(self, population, acqf, clf=None):
+        self.acqf = acqf
+        # select best recommendations and return them as param vectors
+        acqf_vals = [self.acquisition(x, clf=clf)[0] for x in np.array(population)]
         batch_pop, batch_acqf_vals = self.batch_sample_selector(
             acqf_vals,
             population,
             exp_scale_factor=0.01,
         )
-
+        # check shape of batch_pop, intended to be batch, if no batch dim add it
+        if len(batch_pop.shape) == 1:
+            batch_pop = batch_pop.reshape((1, batch_pop.shape[0]))
         # TODO: this bit is pretty hacky...
         batch_pop_deindex = self.deindexify(batch_pop)
         batch_pop_deindex = reverse_normalize(
@@ -405,6 +418,23 @@ class GeneticOptimizer(AcquisitionOptimizer):
         ]
         return return_params
 
+    def _optimize(
+        self, max_iter: int = 10, show_progress: bool = True
+    ) -> List[ParameterVector]:
+        """
+        Returns list of parameter vectors with the optimized recommendations
+
+        show_progress : bool
+            whether to display the optimization progress. Default is False.
+        """
+        # generate population
+        population = self.gen_population(
+            show_progress=show_progress, max_iter=max_iter
+        )
+        # evaluate population
+        return_params = self.evaluate_population(population, self.acqf)
+        return return_params
+    
     def batch_sample_selector(self, acqf_vals, population, exp_scale_factor):
         """select batch of samples from GA population"""
         sort_idx = np.argsort(acqf_vals)
