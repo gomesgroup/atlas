@@ -267,7 +267,7 @@ class BasePlanner(CustomPlanner):
         likelihood = gpytorch.likelihoods.BernoulliLikelihood().to(
             tkwargs["device"]
         )
-
+        Logger.log(f"Using {model.__class__.__name__} model for classification surrogate", "INFO")
         model, likelihood = self.train_vgp(model, likelihood, train_x, train_y)
 
         return model, likelihood

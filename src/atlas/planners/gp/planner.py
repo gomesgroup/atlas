@@ -146,6 +146,7 @@ class GPPlanner(BasePlanner):
         else:
             raise NotImplementedError
 
+        Logger.log(f"Using {model.__class__.__name__} model for regression surrogate", "INFO")
         mll = ExactMarginalLogLikelihood(model.likelihood, model).to(
             tkwargs["device"]
         )
