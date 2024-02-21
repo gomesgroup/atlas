@@ -333,14 +333,14 @@ class BasePlanner(CustomPlanner):
                 )
 
                 # create new model and likelihood for fold
-                model_fold = ClassificationGPMatern(train_x_fold, train_y_fold)
-                likelihood_fold = gpytorch.likelihoods.BernoulliLikelihood()
+                model_fold = ClassificationGPMatern(train_x_fold, train_y_fold).to(tkwargs["device"])
+                likelihood_fold = gpytorch.likelihoods.BernoulliLikelihood().to(tkwargs["device"])
                 optimizer_fold = torch.optim.Adam(
                     model_fold.parameters(), lr=self.vgp_lr
                 )
                 mll_fold = gpytorch.mlls.VariationalELBO(
                     likelihood_fold, model_fold, train_y_fold.numel()
-                )
+                ).to(tkwargs["device"])
 
                 model_fold.train()
                 likelihood_fold.train()

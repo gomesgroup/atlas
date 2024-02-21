@@ -10,7 +10,7 @@ from olympus import ParameterVector
 from olympus.campaigns import ParameterSpace
 from rich.progress import track
 
-from atlas import Logger
+from atlas import Logger, tkwargs
 from atlas.acquisition_functions.acqf_utils import (
     create_available_options,
     get_batch_initial_conditions,
@@ -194,9 +194,9 @@ class GeneticOptimizer(AcquisitionOptimizer):
             )
         )
         # inflate to batch_size for acqf
-        x_for_acqf = torch.tile(x, dims=(1, self.batch_size, 1))
+        x_for_acqf = torch.tile(x, dims=(1, self.batch_size, 1)).to(device=tkwargs["device"])
         # Compute the acquisition function value.
-        acqf_val = self.acqf(x_for_acqf).detach().numpy()[0]  
+        acqf_val = self.acqf(x_for_acqf).detach().cpu().numpy()[0]
         # if we have a classifier, multiply the acqf by the feasibility probability
         if clf is not None:
             class_probs = clf.predict_proba(x)

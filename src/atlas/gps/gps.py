@@ -61,6 +61,7 @@ class ClassificationGPMatern(ApproximateGP):
         #     lengthscale_prior=NormalPrior(loc=0., scale=scale)
         #     ))  # RBFKernel())
         self.covar_module = ScaleKernel(MaternKernel())
+        self.to(tkwargs["device"])
 
     def forward(self, x):
         mean_x = self.mean_module(x)
@@ -93,7 +94,7 @@ class CategoricalSingleTaskGP(ExactGP, GPyTorchModel):
                 )  # ARD for all categorical dimensions
             )
         )
-        self.to(train_x)
+        self.to(tkwargs["device"])
 
     def forward(self, x):
         mean_x = self.mean_module(x)

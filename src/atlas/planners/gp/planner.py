@@ -97,6 +97,7 @@ class GPPlanner(BasePlanner):
                 self.acquisition_type = "general"
 
         Logger.log_chapter(title='Initial design phase')
+        Logger.log_chapter(title=f"Using {tkwargs['device']} device")
 
     def build_train_regression_gp(
         self, train_x: torch.Tensor, train_y: torch.Tensor
