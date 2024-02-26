@@ -614,6 +614,20 @@ def get_acqf_instance(
     acquisition_optimizer_kind = acqf_args["acquisition_optimizer_kind"]
     use_q_acqf = batch_size > 1 and acquisition_optimizer_kind == "gradient"
 
+    # FOR USING MULTIPLE ACQUISITION FUNCTIONS
+
+    if isinstance(acquisition_type, list):
+        acqfs = []
+        for acqf in acquisition_type:
+            acqfs.append(
+                get_acqf_instance(
+                    acqf, reg_model, cla_model, cla_likelihood, acqf_args
+                )
+            )
+        return acqfs
+    
+    # FOR USING SINGLE ACQUISITION FUNCTION
+
     if acquisition_type in ["ei", "pi"]:
         module = __import__(
             f"atlas.acquisition_functions.acqfs",
@@ -673,93 +687,6 @@ def get_acqf_instance(
             cla_likelihood=cla_likelihood,
             **acqf_args,
         )
-    elif acquisition_type == "all":
-        ei = __import__(
-            f"atlas.acquisition_functions.acqfs",
-            fromlist=["EI"],
-        )
-        pi = __import__(
-            f"atlas.acquisition_functions.acqfs",
-            fromlist=["PI"],
-        )
-        variance = VarianceBased(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-        greedy = Greedy(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-        acqf_args["beta"] = torch.tensor(
-                [1.0], **tkwargs
-            )  # default value of beta
-        ucb = __import__(
-            f"atlas.acquisition_functions.acqfs",
-            fromlist=["UCB"],
-        )
-        lcb = __import__(
-            f"atlas.acquisition_functions.acqfs",
-            fromlist=["LCB"],
-        )
-        _ucb = getattr(ucb, "UCB")
-        _ucb = _ucb(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-        _lcb = getattr(lcb, "LCB")
-        _lcb = _lcb(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-        _ei = getattr(ei, "EI")
-        _ei = _ei(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-        _pi = getattr(pi, "PI")
-        _pi = _pi(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-        acqf_args["beta"] = torch.tensor([0.2], **tkwargs).repeat(
-                acqf_args["batch_size"]
-            )  # default value of beta
-        qucb = __import__(
-            f"atlas.acquisition_functions.acqfs",
-            fromlist=["qUCB"],
-        )
-        qlcb = __import__(
-            f"atlas.acquisition_functions.acqfs",
-            fromlist=["qLCB"],
-        )
-        _qucb = getattr(qucb, "qUCB")
-        _qlcb = getattr(qlcb, "qLCB")
-        _qucb = _qucb(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-        _qlcb = _qlcb(
-            reg_model=reg_model,
-            cla_model=cla_model,
-            cla_likelihood=cla_likelihood,
-            **acqf_args,
-        )
-#        return [_ei, _pi, variance, greedy, _ucb, _lcb, _qucb, _qlcb]
-        return [_ei, _pi, _ucb]
     else:
         msg = f"Acquisition function type {acquisition_type} not understood!"
         Logger.log(msg, "FATAL")
