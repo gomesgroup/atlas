@@ -75,6 +75,40 @@ class FeasibilityAwareAcquisition(Object, metaclass=ABCMeta):
             self.acqf_min_max = self._estimate_acqf_min_max()
         else:
             self.acqf_min_max = 0.0, 1.0
+        
+        if self.cla_model is None:
+            try:
+                self.sklearn_cla_model = acqf_args["sklearn_cla_model"]
+            except:
+                self.sklearn_cla_model = None
+    
+        if self.use_reg_only:
+            if self.sklearn_cla_model is not None:
+                Logger.log("Using sklearn classifier for acquisition", "INFO")
+            else:
+                Logger.log("Using regression model only for acquisition", "INFO")
+        else:
+            # p_feas should be 1 - P(infeasible|X) because EI is
+            # maximized by default
+            if not "naive-" in self.feas_strategy:
+                Logger.log("Calculating probability of feasibility", "INFO")
+            else:
+                Logger.log("Using naive feasiblity strategy (p_feas = 1.0)", "INFO")
+
+            if self.feas_strategy == "fwa":
+                Logger.log("Using feasibility-weighted acquisition", "INFO")
+            elif self.feas_strategy == "fca":
+                Logger.log("Using feasibility-constrained acquisition", "INFO")
+            elif self.feas_strategy == "fia":
+                Logger.log("Using feasibility-interpolated acquisition", "INFO")
+            elif "naive-" in self.feas_strategy:
+                Logger.log("Using naive feasibility strategy (p_feas = 1.0)", "INFO")
+                if self.use_p_feas_only:
+                    Logger.log("Using p_feas only", "INFO")
+                else:
+                    Logger.log("Using acqf_val only", "INFO")
+            else:
+                raise NotImplementedError
 
     # @property
     # @abstract_attribute
@@ -117,13 +151,14 @@ class FeasibilityAwareAcquisition(Object, metaclass=ABCMeta):
         )
 
         if self.use_reg_only:
+            if self.sklearn_cla_model is not None:
+                return acqf_val * torch.tensor(self.sklearn_cla_model.predict_proba(X.squeeze(1))[:, 0])
             return acqf_val
         else:
             # p_feas should be 1 - P(infeasible|X) because EI is
             # maximized by default
             if not "naive-" in self.feas_strategy:
                 p_feas = 1.0 - self.compute_feas_post(X)
-
             else:
                 p_feas = 1.0
 
@@ -140,9 +175,11 @@ class FeasibilityAwareAcquisition(Object, metaclass=ABCMeta):
                 )
             elif "naive-" in self.feas_strategy:
                 if self.use_p_feas_only:
+                    Logger.log("Using p_feas only", "INFO")
                     # we do not filter in this case
                     return p_feas
                 else:
+                    Logger.log("Using acqf_val only", "INFO")
                     return acqf_val
             else:
                 raise NotImplementedError

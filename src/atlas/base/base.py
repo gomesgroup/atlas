@@ -262,7 +262,6 @@ class BasePlanner(CustomPlanner):
         and train the model
         """
         Logger.log_chapter(title='Training classification surrogate model')
-
         model = ClassificationGPMatern(train_x, train_y).to(tkwargs["device"])
         likelihood = gpytorch.likelihoods.BernoulliLikelihood().to(
             tkwargs["device"]

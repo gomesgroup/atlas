@@ -68,8 +68,17 @@ class GradientOptimizer(AcquisitionOptimizer):
 
         self.kind = "gradient"
 
-    def _optimize(self):
+    def _optimize(self, acqf=None, clf=None):
         best_idx = None  # only needed for the fully categorical case
+
+        if isinstance(acqf, list):
+            suggested_params = {}
+            for acqf_ in acqf:
+                name = acqf_.__class__.__name__
+                Logger.log(f"Generating sample using {name} acquisition function...", "INFO")
+                self.acqf = acqf_
+                suggested_params[name] = self._optimize(acqf=None, clf=clf)
+            return suggested_params
 
         if self.acquisition_type == "general":
             func_dims = self.params_obj.functional_dims
@@ -199,6 +208,7 @@ class GradientOptimizer(AcquisitionOptimizer):
                 the corresponding acqf values
         """
 
+        choices = choices.to(tkwargs['device'])
         original_choices_batched = torch.clone(choices)
         choices_batched = choices.unsqueeze(-2)
 

@@ -49,13 +49,13 @@ class AcquisitionOptimizer:
     def _optimize(self):
         ...
 
-    def optimize(self):
+    def optimize(self, **kwargs: Any):
 
         Logger.log_chapter(title='Acquisition function optimization')
 
         start_time = time.time()
         # returns list of parameter vectors with recommendations
-        results = self._optimize()
+        results = self._optimize(**kwargs)
         self.timings_dict["acquisition_opt"] = time.time() - start_time
 
         # if we have a general parameter optimization, we use a

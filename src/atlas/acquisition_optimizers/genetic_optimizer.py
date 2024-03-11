@@ -197,13 +197,6 @@ class GeneticOptimizer(AcquisitionOptimizer):
         x_for_acqf = torch.tile(x, dims=(1, self.batch_size, 1)).to(device=tkwargs["device"])
         # Compute the acquisition function value.
         acqf_val = self.acqf(x_for_acqf).detach().cpu().numpy()[0]
-        # if we have a classifier, multiply the acqf by the feasibility probability
-        if clf is not None:
-            class_probs = clf.predict_proba(x)
-            feas_prob = class_probs[0][0]
-            acqf_val *= feas_prob
-        # return the negative of the acqf - this is conventionally minimized by
-        # deap, but we want to maximize acqf
         return (-round(acqf_val, 5),)
 
     def gen_population(self, show_progress: bool = True, max_iter: int = 10):
@@ -353,7 +346,32 @@ class GeneticOptimizer(AcquisitionOptimizer):
 
         return population
 
-    def evaluate_population(self, population, acqf, clf=None):
+    def remove_observed(self, population, observations):
+        """Remove observed points from population"""
+        remove_from_pop = []
+        for idx, x in enumerate(np.array(population)):
+            x_list = []
+            for p_idx, param in enumerate(self.param_space):
+                if param.type == "categorical":
+                    option = param.options[int(x[p_idx])]
+                else:
+                    option = x
+                x_list.append(option)
+            if x_list in observations.tolist():
+                remove_from_pop.append(idx)
+
+        new_population = [population[i] for i in range(len(population)) if i not in remove_from_pop]
+        # log number of points removed
+        Logger.log(
+            f"Removed {len(remove_from_pop)} observed points from population",
+            "INFO",
+        )
+
+        return new_population
+    
+    def evaluate_population(self, observations, population, acqf, clf=None):
+        # remove observed points from population
+        population = self.remove_observed(population, observations)
         self.acqf = acqf
         # select best recommendations and return them as param vectors
         acqf_vals = [self.acquisition(x, clf=clf)[0] for x in np.array(population)]
@@ -419,7 +437,7 @@ class GeneticOptimizer(AcquisitionOptimizer):
         return return_params
 
     def _optimize(
-        self, max_iter: int = 10, show_progress: bool = True
+        self, max_iter: int = 10, show_progress: bool = True, clf=None, acqf=None
     ) -> List[ParameterVector]:
         """
         Returns list of parameter vectors with the optimized recommendations
@@ -431,9 +449,20 @@ class GeneticOptimizer(AcquisitionOptimizer):
         population = self.gen_population(
             show_progress=show_progress, max_iter=max_iter
         )
-        # evaluate population
-        return_params = self.evaluate_population(population, self.acqf)
-        return return_params
+
+        if isinstance(acqf, list): # we are using sampling from multiple acquisition functions 
+            suggested_params = {}
+            for acqf_ in acqf:
+                name = acqf_.__class__.__name__
+                Logger.log(f"Generating sample using {name} acquisition function...", "INFO")
+                # send self.clf here to use sklearn classifier if available
+                params = self.evaluate_population(self._params, population, acqf_, clf=clf) # evaluate the population using this acqf
+                suggested_params[name] = params # store the suggested params
+            return suggested_params
+        else: # we have a single acquisition function
+            # evaluate population
+            return_params = self.evaluate_population(self._params, population, self.acqf, clf=clf)
+            return return_params
     
     def batch_sample_selector(self, acqf_vals, population, exp_scale_factor):
         """select batch of samples from GA population"""
