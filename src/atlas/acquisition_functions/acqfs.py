@@ -152,7 +152,7 @@ class FeasibilityAwareAcquisition(Object, metaclass=ABCMeta):
 
         if self.use_reg_only:
             if self.sklearn_cla_model is not None:
-                return acqf_val * torch.tensor(self.sklearn_cla_model.predict_proba(X.squeeze(1))[:, 0])
+                return acqf_val * torch.tensor(self.sklearn_cla_model.predict_proba(X.cpu().squeeze(1))[:, 0]).to(tkwargs['device'])
             return acqf_val
         else:
             # p_feas should be 1 - P(infeasible|X) because EI is
