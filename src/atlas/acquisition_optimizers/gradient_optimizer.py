@@ -40,6 +40,7 @@ class GradientOptimizer(AcquisitionOptimizer):
         timings_dict: Dict,
         use_reg_only=False,
         acqf_args=None,
+        known_constraint_args: Optional[Dict[str, Any]] = {},
         **kwargs: Any,
     ):
         local_args = {
@@ -54,6 +55,7 @@ class GradientOptimizer(AcquisitionOptimizer):
         self.acqf = acqf
         self.bounds = self.params_obj.bounds
         self.known_constraints = known_constraints
+        self.known_constraint_args = known_constraint_args
         self.batch_size = batch_size
         self.feas_strategy = feas_strategy
         self.batched_strategy = batched_strategy
@@ -171,7 +173,6 @@ class GradientOptimizer(AcquisitionOptimizer):
             mins_x=self._mins_x,
             maxs_x=self._maxs_x,
         )
-
         results, best_idx = self._optimize_cartesian_product(
             acqf=self.acqf,
             batch_size=self.batch_size,
@@ -215,7 +216,7 @@ class GradientOptimizer(AcquisitionOptimizer):
         if batch_size > 1:
             # batch selection by sequential conditioning
             candidate_list, acqf_val_list = [], []
-            init_pending_params = acqf.set_pending_params(pending_params=None)
+            init_pending_params = acqf.set_pending_params(None)
 
             for batch_idx in range(batch_size):
                 with torch.no_grad():
@@ -246,14 +247,14 @@ class GradientOptimizer(AcquisitionOptimizer):
                     )
 
             # reset acqf to initial state
-            _ = acqf.set_pending_params(pending_params=None)
+            _ = acqf.set_pending_params(None)
             # need to return the original indices of the selected candidates
             best_idxs = []
             for (
                 candidate
             ) in candidate_list:  # each candidate is shape (1, num_features)
                 bools = [
-                    torch.all(candidate[0] == original_choices_batched[i, :])
+                    torch.all(candidate[0] == original_choices_batched[i, :]).to('cpu')
                     for i in range(original_choices_batched.shape[0])
                 ]
                 assert bools.count(True) == 1
@@ -422,11 +423,11 @@ class GradientOptimizer(AcquisitionOptimizer):
                 else candidates
             )
 
-        acqf.set_pending_params(pending_params=None)
+        acqf.set_pending_params(None)
 
         acqf_vals = acqf(candidates)
 
-        return candidates, acq_vals
+        return candidates, acqf_vals
 
     def postprocess_results(self, results, best_idx=None):
         # expects list as results

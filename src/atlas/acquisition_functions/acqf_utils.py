@@ -205,11 +205,17 @@ def get_batch_initial_conditions(
             # evaluated on compressed representation of parameters
             constraint_vals = []
             # loop through all known constriaint callables
-            for constraint_callable in known_constraints:
-                # returns True if feasible, False if infeasible
-                kc_res = [
-                    constraint_callable(params) for params in raw_proposals
-                ]
+            for idx, constraint_callable in enumerate(known_constraints.known_constraints):
+                if known_constraints.known_constraint_args:
+                    kwargs = known_constraints.known_constraint_args[idx]
+                else:
+                    kwargs = {}
+                kc_res = [constraint_callable(params, **kwargs) for params in raw_proposals]
+
+                # # returns True if feasible, False if infeasible
+                # kc_res = [
+                #     constraint_callable(params) for params in raw_proposals
+                # ]
                 constraint_vals.append(kc_res)
 
             constraint_vals = torch.tensor(constraint_vals)
@@ -398,11 +404,21 @@ def create_available_options(
             # known constraints
             kc_results = []
             for cat_unconst in current_avail_cat_unconst:
-                if all([kc(cat_unconst) for kc in known_constraint_callables]):
+                kc_results_per_cat = []
+                for idx, kc in enumerate(known_constraint_callables.known_constraints):
+                    if known_constraint_callables.known_constraint_args:
+                        kwargs = known_constraint_callables.known_constraint_args[idx]
+                    else:
+                        kwargs = {}
+                    kc_res = kc(cat_unconst, **kwargs)
+                    kc_results_per_cat.append(kc_res)
+                
+                if all(kc_results_per_cat):
                     # feasible
                     kc_results.append(True)
                 else:
                     kc_results.append(False)
+                
             feas_mask = np.where(kc_results)[0]
             current_avail_feat_kc = current_avail_feat_unconst[feas_mask]
             current_avail_cat_kc = current_avail_cat_unconst[feas_mask]

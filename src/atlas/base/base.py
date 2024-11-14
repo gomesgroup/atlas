@@ -66,6 +66,7 @@ class BasePlanner(CustomPlanner):
         max_jitter: float = 1e-1,
         cla_threshold: float = 0.5,
         known_constraints: Optional[List[Callable]] = None,
+        known_constraint_args: Optional[List[Dict[str, Any]]] = None,
         compositional_params: Optional[List[int]] = None,
         permutation_params: Optional[List[int]] = None,
         batch_constrained_params: Optional[List[int]] = None,
@@ -115,6 +116,7 @@ class BasePlanner(CustomPlanner):
             self.user_known_constraints = []
         else:
             self.user_known_constraints = known_constraints
+            self.known_constraint_args = known_constraint_args
 
         self.general_parameters = general_parameters
         self.molecular_params = molecular_params
@@ -251,6 +253,7 @@ class BasePlanner(CustomPlanner):
             self.compositional_params,
             self.permutation_params,
             self.batch_constrained_params,
+            self.known_constraint_args,
         )
 
     def build_train_classification_gp(
@@ -821,15 +824,29 @@ class BasePlanner(CustomPlanner):
             # check to see if the recommended parameters satisfy the
             # known constraints, if there are any
             if self.known_constraints is not None:
-                # we have some known constraints
-                kc_res = [
-                    kc(rec_params.to_array()) for kc in self.known_constraints
-                ]
-                if all(kc_res):
+                kc_results = []
+                for idx, kc in enumerate(self.known_constraints.known_constraints):
+                    if self.known_constraint_args:
+                        kwargs = self.known_constraint_args[idx]
+                    else:
+                        kwargs = {}
+                    
+                    kc_res = kc(rec_params.to_array(), **kwargs)
+                    kc_results.append(kc_res)
+                if all(kc_results):
                     return_params.append(rec_params)
                     self.num_init_design_completed += (
                         1  # batch_size always 1 for init design planner
                     )
+                # we have some known constraints
+                # kc_res = [
+                #     kc(rec_params.to_array()) for kc in self.known_constraints
+                # ]
+                # if all(kc_res):
+                #     return_params.append(rec_params)
+                #     self.num_init_design_completed += (
+                #         1  # batch_size always 1 for init design planner
+                #     )
             else:
                 return_params.append(rec_params)
                 self.num_init_design_completed += 1

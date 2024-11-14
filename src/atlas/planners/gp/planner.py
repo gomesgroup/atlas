@@ -70,6 +70,7 @@ class GPPlanner(BasePlanner):
         max_jitter: float = 1e-1,
         cla_threshold: float = 0.5,
         known_constraints: Optional[List[Callable]] = None,
+        known_constraint_args: Optional[List[Dict[str, Any]]] = None,
         compositional_params: Optional[List[int]] = None,
         permutation_params: Optional[List[int]] = None,
         batch_constrained_params: Optional[List[int]] = None,

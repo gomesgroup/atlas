@@ -45,6 +45,7 @@ class GeneticOptimizer(AcquisitionOptimizer):
         timings_dict: Dict,
         use_reg_only: bool = False,
         acqf_args=None,
+        known_constraint_args: Optional[Dict[str, Any]] = {},
         **kwargs: Any,
     ):
         """
@@ -68,6 +69,7 @@ class GeneticOptimizer(AcquisitionOptimizer):
         self.feas_strategy = feas_strategy
         self.fca_constraint = fca_constraint
         self.known_constraints = known_constraints
+        self.known_constraint_args = known_constraint_args
         self.use_reg_only = use_reg_only
         self.has_descriptors = self.params_obj.has_descriptors
         self._params = params
@@ -218,7 +220,7 @@ class GeneticOptimizer(AcquisitionOptimizer):
 
         # define which single-step optimization function to use, based on whether or not
         # we have known constraints
-        if self.nonlinear_inequality_constraints != []:
+        if self.nonlinear_inequality_constraints != [] or self.known_constraints != []:
             Logger.log(
                 "GA acquisition optimizer using constrained evolution", "INFO"
             )
@@ -597,7 +599,14 @@ class GeneticOptimizer(AcquisitionOptimizer):
             sample=sample, param_space=self.param_space
         )
         param_list = list(param.values())
-        # feasible = [constr(param) for constr in self.known_constraints]
+        feasible = []
+        for idx, constr in enumerate(self.known_constraints.known_constraints):
+            if self.known_constraints.known_constraint_args:
+                kwargs = self.known_constraints.known_constraint_args[idx]
+            else:
+                kwargs = {}
+            feasible.append(constr(param_list, **kwargs))
+        
         feasible = [
             constr(param_list)
             for constr in self.nonlinear_inequality_constraints

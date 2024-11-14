@@ -194,9 +194,11 @@ class KnownConstraints:
         compositional_params: Optional[List[int]] = None,
         permutation_params: Optional[List[int]] = None,
         batch_constrained_params: Optional[List[int]] = None,
+        known_constraint_args: Optional[Dict[str, Any]] = {},
     ) -> None:
         self.param_space = param_space
         self.known_constraints = known_constraints
+        self.known_constraint_args = known_constraint_args
         self.has_descriptors = has_descriptors
         self.compositional_params = compositional_params
         self.permutation_params = permutation_params
@@ -302,9 +304,13 @@ class KnownConstraints:
                 self.has_descriptors,
             )
             kc_vals = []
-            for kc in self.known_constraints:
+            for idx, kc in enumerate(self.known_constraints):
+                if self.known_constraint_args:
+                    kwargs = self.known_constraint_args[idx]
+                else:
+                    kwargs = {}
                 for sample in samples:
-                    if type(kc(sample)) != bool:
+                    if type(kc(sample, **kwargs)) != bool:
                         Logger.log(
                             f"Known constraint functions must return booleans. Not the case for parameter setting {sample}",
                             "FATAL",
