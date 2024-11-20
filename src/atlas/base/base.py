@@ -20,7 +20,7 @@ from olympus.planners import AbstractPlanner, CustomPlanner
 from olympus.scalarizers import Scalarizer
 from rich.progress import track
 
-from atlas import Logger, tkwargs
+from atlas import Logger
 from atlas.gps.gps import ClassificationGPMatern
 from atlas.known_constraints.known_constraints import (
     KnownConstraints,
@@ -81,6 +81,7 @@ class BasePlanner(CustomPlanner):
         fidelity_params: int = None,
         fidelities: List[float] = None,
         fixed_cost: Optional[float] = None,
+        tkwargs: Dict[str, Any] = {},
         **kwargs: Any,
     ):
         """Base optimizer class containing higher-level operations.
@@ -97,6 +98,7 @@ class BasePlanner(CustomPlanner):
         self.feas_param = feas_param
         self.use_min_filter = use_min_filter
         self.batch_size = batch_size
+        self.tkwargs = tkwargs
         if random_seed is None:
             self.random_seed = np.random.randint(0, int(10e6))
         else:
@@ -265,9 +267,9 @@ class BasePlanner(CustomPlanner):
         and train the model
         """
         Logger.log_chapter(title='Training classification surrogate model')
-        model = ClassificationGPMatern(train_x, train_y).to(tkwargs["device"])
+        model = ClassificationGPMatern(train_x, train_y).to(self.tkwargs["device"])
         likelihood = gpytorch.likelihoods.BernoulliLikelihood().to(
-            tkwargs["device"]
+            self.tkwargs["device"]
         )
         Logger.log(f"Using {model.__class__.__name__} model for classification surrogate", "INFO")
         model, likelihood = self.train_vgp(model, likelihood, train_x, train_y)
@@ -290,7 +292,7 @@ class BasePlanner(CustomPlanner):
 
         mll = gpytorch.mlls.VariationalELBO(
             likelihood, model, train_y.numel()
-        ).to(tkwargs["device"])
+        ).to(self.tkwargs["device"])
 
         # cross-validation parameters
         num_folds = 3
@@ -335,14 +337,14 @@ class BasePlanner(CustomPlanner):
                 )
 
                 # create new model and likelihood for fold
-                model_fold = ClassificationGPMatern(train_x_fold, train_y_fold).to(tkwargs["device"])
-                likelihood_fold = gpytorch.likelihoods.BernoulliLikelihood().to(tkwargs["device"])
+                model_fold = ClassificationGPMatern(train_x_fold, train_y_fold).to(self.tkwargs["device"])
+                likelihood_fold = gpytorch.likelihoods.BernoulliLikelihood().to(self.tkwargs["device"])
                 optimizer_fold = torch.optim.Adam(
                     model_fold.parameters(), lr=self.vgp_lr
                 )
                 mll_fold = gpytorch.mlls.VariationalELBO(
                     likelihood_fold, model_fold, train_y_fold.numel()
-                ).to(tkwargs["device"])
+                ).to(self.tkwargs["device"])
 
                 model_fold.train()
                 likelihood_fold.train()
@@ -520,10 +522,10 @@ class BasePlanner(CustomPlanner):
 
         # convert to torch tensors and return
         return (
-            torch.tensor(train_x_cla, **tkwargs),
-            torch.tensor(train_y_cla, **tkwargs).squeeze(),
-            torch.tensor(train_x_reg, **tkwargs),
-            torch.tensor(train_y_reg, **tkwargs),
+            torch.tensor(train_x_cla, **self.tkwargs),
+            torch.tensor(train_y_cla, **self.tkwargs).squeeze(),
+            torch.tensor(train_x_reg, **self.tkwargs),
+            torch.tensor(train_y_reg, **self.tkwargs),
         )
 
     def reg_surrogate(
@@ -561,7 +563,7 @@ class BasePlanner(CustomPlanner):
                     sample_x.append(float(element))
             X_proc.append(sample_x)
 
-        X_proc = torch.tensor(np.array(X_proc), **tkwargs)
+        X_proc = torch.tensor(np.array(X_proc), **self.tkwargs)
 
         if (
             self.problem_type == "fully_categorical"
@@ -619,7 +621,7 @@ class BasePlanner(CustomPlanner):
                     sample_x.append(float(element))
             X_proc.append(sample_x)
 
-        X_proc = torch.tensor(np.array(X_proc), **tkwargs)
+        X_proc = torch.tensor(np.array(X_proc), **self.tkwargs)
 
         if (
             self.problem_type == "fully_categorical"
@@ -672,7 +674,7 @@ class BasePlanner(CustomPlanner):
                     sample_x.append(float(element))
             X_proc.append(sample_x)
 
-        X_proc = torch.tensor(np.array(X_proc), **tkwargs)
+        X_proc = torch.tensor(np.array(X_proc), **self.tkwargs)
 
         if (
             self.problem_type == "fully_categorical"
@@ -914,7 +916,7 @@ class BasePlanner(CustomPlanner):
                 samples, self.params_obj._mins_x, self.params_obj._maxs_x
             )
 
-        X = torch.tensor(samples, **tkwargs)
+        X = torch.tensor(samples, **self.tkwargs)
 
         likelihood = self.cla_likelihood(self.cla_model(X))
         mean = 1.0 - likelihood.mean.detach()  # convert p_infeas to p_feas

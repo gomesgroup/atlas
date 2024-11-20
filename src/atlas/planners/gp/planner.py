@@ -13,7 +13,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from olympus import ParameterVector
 from olympus.campaigns import ParameterSpace
 
-from atlas import Logger, tkwargs
+from atlas import Logger
 from atlas.acquisition_functions.acqfs import get_acqf_instance
 from atlas.acquisition_optimizers import (
     GeneticOptimizer,
@@ -82,6 +82,7 @@ class GPPlanner(BasePlanner):
         moo_params: Dict[str, Union[str, float, int, bool, List]] = {},
         goals: Optional[List[str]] = None,
         golem_config: Optional[Dict[str, Any]] = None,
+        tkwargs: Dict[str, Any] = {},
         **kwargs: Any,
     ):
         local_args = {
@@ -99,6 +100,7 @@ class GPPlanner(BasePlanner):
 
         Logger.log_chapter(title='Initial design phase')
         Logger.log_chapter(title=f"Using {tkwargs['device']} device")
+        self.tkwargs = tkwargs
 
     def build_train_regression_gp(
         self, train_x: torch.Tensor, train_y: torch.Tensor
@@ -114,7 +116,7 @@ class GPPlanner(BasePlanner):
             "fully_discrete",
             "mixed_disc_cont",
         ]:
-            model = SingleTaskGP(train_x, train_y).to(tkwargs["device"])
+            model = SingleTaskGP(train_x, train_y).to(self.tkwargs["device"])
         elif self.problem_type == "fully_categorical":
             if self.has_descriptors:
                 # we have some descriptors, use the Matern kernel or Tanimoto if we have all molecular dims
@@ -122,34 +124,34 @@ class GPPlanner(BasePlanner):
                     # use TanimotoGP
                     # NOTE: here we assume we are given Morgan FPs as descriptors, might want to validate
                     # NOTE: this is only implemented for single molecular dimension
-                    model = TanimotoGP(train_x, train_y).to(tkwargs["device"])
+                    model = TanimotoGP(train_x, train_y).to(self.tkwargs["device"])
                 else:
                     # no molecular parameters, use Matern GP
                     model = SingleTaskGP(train_x, train_y).to(
-                        tkwargs["device"]
+                        self.tkwargs["device"]
                     )
             else:
                 # if we have no descriptors, use a Categorical kernel
                 # based on the HammingDistance
                 model = CategoricalSingleTaskGP(train_x, train_y).to(
-                    tkwargs["device"]
+                    self.tkwargs["device"]
                 )
         elif "mixed_cat_" in self.problem_type:
             if self.has_descriptors:
                 # we have some descriptors, use the Matern kernel
-                model = SingleTaskGP(train_x, train_y).to(tkwargs["device"])
+                model = SingleTaskGP(train_x, train_y).to(self.tkwargs["device"])
             else:
                 cat_dims = get_cat_dims(self.param_space)
                 model = MixedSingleTaskGP(
                     train_x, train_y, cat_dims=cat_dims
-                ).to(tkwargs["device"])
+                ).to(self.tkwargs["device"])
 
         else:
             raise NotImplementedError
 
         Logger.log(f"Using {model.__class__.__name__} model for regression surrogate", "INFO")
         mll = ExactMarginalLogLikelihood(model.likelihood, model).to(
-            tkwargs["device"]
+            self.tkwargs["device"]
         )
         # fit the GP
         start_time = time.time()
