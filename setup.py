@@ -43,7 +43,7 @@ setup(
         "pyDOE",
         "botorch==0.8.5",
         "matter-chimera",
-        "matter-golem",
+        "matter-golem @ git+https://github.com/gomesgroup/golem",
     ],
     python_requires=">=3.6",
 )
