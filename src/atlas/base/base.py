@@ -12,8 +12,8 @@ import gpytorch
 import numpy as np
 import olympus
 import torch
-from golem import *
-from golem import Golem
+# from golem import *
+# from golem import Golem
 from olympus import ParameterVector
 from olympus.campaigns import ParameterSpace
 from olympus.planners import AbstractPlanner, CustomPlanner
@@ -28,7 +28,7 @@ from atlas.known_constraints.known_constraints import (
 )
 from atlas.params.params import Parameters
 from atlas.unknown_constraints.unknown_constraints import UnknownConstraints
-from atlas.utils.golem_utils import get_golem_dists
+# from atlas.utils.golem_utils import get_golem_dists
 from atlas.utils.planner_utils import (
     cat_param_to_feat,
     forward_normalize,
@@ -77,7 +77,7 @@ class BasePlanner(CustomPlanner):
         scalarizer_kind: Optional[str] = "Hypervolume",
         moo_params: Dict[str, Union[str, float, int, bool, List]] = {},
         goals: Optional[List[str]] = None,
-        golem_config: Optional[Dict[str, Any]] = None,
+        # golem_config: Optional[Dict[str, Any]] = None,
         fidelity_params: int = None,
         fidelities: List[float] = None,
         fixed_cost: Optional[float] = None,
@@ -127,7 +127,7 @@ class BasePlanner(CustomPlanner):
         self.scalarizer_kind = scalarizer_kind
         self.moo_params = moo_params
         self.goals = goals
-        self.golem_config = golem_config
+        # self.golem_config = golem_config
 
         self.fidelity_params = fidelity_params
         self.fidelities = fidelities
@@ -229,23 +229,23 @@ class BasePlanner(CustomPlanner):
                 Logger.log(msg, "FATAL")
 
         # initialize golem
-        if self.golem_config is not None:
-            self.golem_dists = get_golem_dists(
-                self.golem_config, self.param_space
-            )
+        # if self.golem_config is not None:
+        #     self.golem_dists = get_golem_dists(
+        #         self.golem_config, self.param_space
+        #     )
 
-            if not self.golem_dists == None:
-                self.golem = Golem(
-                    forest_type="dt",
-                    ntrees=50,
-                    goal="min",
-                    verbose=True,
-                )  # always minimization goal
-            else:
-                self.golem = None
-        else:
-            self.golem_dists = None
-            self.golem = None
+        #     if not self.golem_dists == None:
+        #         self.golem = Golem(
+        #             forest_type="dt",
+        #             ntrees=50,
+        #             goal="min",
+        #             verbose=True,
+        #         )  # always minimization goal
+        #     else:
+        #         self.golem = None
+        # else:
+        self.golem_dists = None
+        self.golem = None
 
         # deal with user-level known constraints
         self.known_constraints = KnownConstraints(
