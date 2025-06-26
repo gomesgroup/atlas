@@ -76,7 +76,6 @@ class UnknownConstraints:
                     worst_obj = torch.amax(
                         train_y_scaled_reg[~train_y_scaled_reg.isnan()]
                     )
-                    import pdb; pdb.set_trace()
                     to_replace = torch.ones(infeas_ix.size()) * worst_obj
 
                     new_train_y_scaled_reg[infeas_ix] = to_replace.double()
