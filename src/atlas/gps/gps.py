@@ -352,3 +352,28 @@ class MixedTanimotoSingleTaskGP(SingleTaskGP):
             "cat_dims": categorical_features,
             "likelihood": likelihood,
         }
+
+
+class DKLSingleTaskGP(ExactGP, GPyTorchModel):
+    _num_outputs = 1
+
+    def __init__(self, train_x, train_y, h_dim=48, z_dim=40):
+        super().__init__(train_x, train_y.squeeze(-1), GaussianLikelihood())
+        x_dim = train_x.size(-1)
+        self.feature_extractor = torch.nn.Sequential(
+            torch.nn.Linear(x_dim, h_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(h_dim, h_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(h_dim, z_dim),
+            torch.nn.ReLU(),
+        )
+        self.mean_module = gpytorch.means.ConstantMean()
+        self.covar_module = ScaleKernel(MaternKernel(nu=2.5, ard_num_dims=z_dim))
+        self.to(tkwargs["device"])
+
+    def forward(self, x):
+        z = self.feature_extractor(x)
+        mean_z = self.mean_module(z)
+        covar_z = self.covar_module(z)
+        return MultivariateNormal(mean_z, covar_z)
