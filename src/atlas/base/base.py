@@ -81,6 +81,7 @@ class BasePlanner(CustomPlanner):
         fidelity_params: int = None,
         fidelities: List[float] = None,
         fixed_cost: Optional[float] = None,
+        use_dkl: bool = False,
         tkwargs: Dict[str, Any] = {},
         **kwargs: Any,
     ):
@@ -128,7 +129,8 @@ class BasePlanner(CustomPlanner):
         self.moo_params = moo_params
         self.goals = goals
         # self.golem_config = golem_config
-
+        self.use_dkl = use_dkl
+        
         self.fidelity_params = fidelity_params
         self.fidelities = fidelities
         self.fixed_cost = fixed_cost
