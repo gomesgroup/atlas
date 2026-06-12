@@ -21,7 +21,7 @@ from atlas.acquisition_optimizers import (
     PymooGAOptimizer,
 )
 from atlas.base.base import BasePlanner
-from atlas.gps.gps import CategoricalSingleTaskGP, TanimotoGP
+from atlas.gps.gps import CategoricalSingleTaskGP, TanimotoGP, DKLSingleTaskGP
 from atlas.utils.planner_utils import get_cat_dims
 
 warnings.filterwarnings("ignore", "^.*jitter.*", category=RuntimeWarning)
@@ -82,6 +82,7 @@ class GPPlanner(BasePlanner):
         moo_params: Dict[str, Union[str, float, int, bool, List]] = {},
         goals: Optional[List[str]] = None,
         golem_config: Optional[Dict[str, Any]] = None,
+        use_dkl: bool = False,
         tkwargs: Dict[str, Any] = {},
         **kwargs: Any,
     ):
@@ -110,8 +111,12 @@ class GPPlanner(BasePlanner):
 
         Logger.log_chapter(title='Training regression surrogate model')
 
+        if self.use_dkl:
+            model = DKLSingleTaskGP(
+                train_x, train_y
+            ).to(self.tkwargs["device"])
         # infer the model based on the parameter types
-        if self.problem_type in [
+        elif self.problem_type in [
             "fully_continuous",
             "fully_discrete",
             "mixed_disc_cont",
